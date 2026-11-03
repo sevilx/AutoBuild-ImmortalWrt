@@ -1,0 +1,9 @@
+# Files touched outside /etc/config that must survive "sysupgrade" with
+# settings kept. Without this the opkg/apk mirror selection is reset to the
+# upstream official feed after every upgrade.
+/etc/opkg/distfeeds.conf
+/etc/opkg/customfeeds.conf
+/etc/opkg-mirror.state
+/etc/opkg-mirror.auto
+/etc/apk/repositories
+/etc/apk/repositories.d/

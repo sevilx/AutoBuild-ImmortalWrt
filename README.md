@@ -1,121 +1,179 @@
 # AutoBuild-ImmortalWrt
 
-基于 GitHub Actions 的 **ImmortalWrt 自动编译**项目，上游固定为 [`immortalwrt/immortalwrt`](https://github.com/immortalwrt/immortalwrt)。
-一次配置，长期出包：主打开箱即用的国内网络环境（国内软件源、BBR、HW NAT、FullCone NAT）与 mihomo 透明代理。
+**English** | [简体中文](README.zh-CN.md)
 
-> 仅用于个人学习与自用，请自行评估刷机风险。
+GitHub Actions firmware builder for [ImmortalWrt](https://github.com/immortalwrt/immortalwrt) (upstream pinned to `immortalwrt/immortalwrt`).
+
+Ready-to-use images for x86_64 / x86 / ARM64 / ARMv7, with a China-friendly setup baked in: domestic opkg mirrors, BBR, HW NAT, FullCone NAT and the **nikki** (mihomo) transparent proxy.
+
+> For personal use. Flashing firmware is always your own risk.
 
 ---
 
-## ✨ 特性
+## Features
 
-| 能力 | 说明 |
+| Feature | What it does |
 | --- | --- |
-| **国内软件源加速** | 镜像内置 `opkg-mirror`：首次联网自动测速择优（中科大 / 南大 / 浙大），也可一条命令手动切换，兼容 opkg 与 apk |
-| **Turbo ACC 菜单** | 自带 `luci-app-turboacc`，在 `网络 → Turbo ACC 网络加速` 中勾选 BBR / 软件流量分载 / 硬件流量分载(HW NAT) / FullCone NAT，全部默认开启 |
-| **多架构** | x86_64、x86(i386)、ARMv8(aarch64)、ARMv7 四个目标并行编译 |
-| **默认内置 nikki** | [`nikkinikki-org/OpenWrt-nikki`](https://github.com/nikkinikki-org/OpenWrt-nikki)（mihomo 透明代理）+ 中文语言包，编译时默认选中 |
-| **干净可维护** | 配置以「片段 + `make defconfig`」方式生成，不锁定上游细节；编译前有配置校验，目标选错会直接失败而不是默默出个错包 |
-| **自动发布** | 手动触发 / 打 tag 时自动创建 GitHub Release 并附带 `SHA256SUMS.txt` |
+| **China opkg mirror** | Ships `/usr/sbin/opkg-mirror`. On first boot it benchmarks USTC / NJU / ZJU and rewrites the feed prefix. Works with both `opkg` (24.10) and `apk` (25.12+) |
+| **Turbo ACC menu** | Bundled `luci-app-turboacc`: `Network -> Turbo ACC` toggles BBR, software flow offloading, hardware flow offloading (HW NAT) and FullCone NAT. All enabled by default |
+| **Multi-arch** | `x86_64`, `x86_32`, `armsr_armv8`, `armsr_armv7` built in parallel by one matrix |
+| **nikki built in** | [`nikkinikki-org/OpenWrt-nikki`](https://github.com/nikkinikki-org/OpenWrt-nikki) (mihomo core) + Simplified Chinese i18n, selected by default |
+| **Verifiable builds** | `.config` is assembled from fragments then `make defconfig`; `scripts/check-config.sh` fails the build if the target board/subtarget or key packages were silently dropped |
+| **Manual only** | `workflow_dispatch` only. No cron, no push trigger - nothing runs unless you click *Run workflow* |
 
 ---
 
-## 🎯 支持的目标
+## Supported targets
 
-| 目标 ID | 架构 | 上游 target | 适用设备 | 产物 |
+| ID | Arch | Upstream target | Typical use | Images |
 | --- | --- | --- | --- | --- |
-| `x86_64` | x86_64 (amd64) | `x86/64` | 软路由、小主机、PVE/ESXi/KVM 虚拟机 | `*-combined-efi.img.gz`（UEFI）、`*-combined.img.gz`（BIOS） |
-| `x86_32` | i386 | `x86/generic` | 老机器、32 位虚拟机 | `*-combined.img.gz`（仅 BIOS） |
-| `armsr_armv8` | aarch64 | `armsr/armv8` | ARM64 服务器/开发板/UEFI 虚拟机 | `*-combined-efi.img.gz`、`*-rootfs.img.gz` |
-| `armsr_armv7` | armv7 | `armsr/armv7` | ARMv7 开发板、老款 ARM 盒子 | `*-combined-efi.img.gz`、`*-rootfs.img.gz` |
+| `x86_64` | x86_64 (amd64) | `x86/64` | Soft routers, mini PCs, PVE/ESXi/KVM | `*-squashfs-combined-efi.img.gz` (UEFI), `*-squashfs-combined.img.gz` (BIOS) |
+| `x86_32` | i386 | `x86/generic` | Old hardware, 32-bit VMs | `*-combined.img.gz` (BIOS only) |
+| `armsr_armv8` | aarch64 | `armsr/armv8` | ARM64 servers / boards / UEFI VMs | `*-combined-efi.img.gz`, `*-rootfs.img.gz` |
+| `armsr_armv7` | armv7 | `armsr/armv7` | ARMv7 boards and TV boxes | `*-combined-efi.img.gz`, `*-rootfs.img.gz` |
 
-> 路由器（ramips / ipq / mediatek 等）不在本项目范围内：不同机型的镜像规则差异很大，需要按机型单独维护。
-
----
-
-## 🚀 使用方法
-
-### 1. 触发编译
-
-Fork 本仓库后，进入 **Actions → Build ImmortalWrt → Run workflow**：
-
-| 输入项 | 说明 |
-| --- | --- |
-| `branch` | 上游分支：`openwrt-24.10`（默认，opkg）、`openwrt-25.12`（apk）、`master` |
-| `targets` | 目标列表，逗号分隔，例如 `x86_64,armsr_armv8`；留空或 `all` 表示全部 |
-| `release` | 是否在编译完成后创建 Release（默认是） |
-
-也可以直接推一个 `v*` tag 触发。定时任务每周六 01:00（北京时间）跑一次，只产出 Artifacts 不发 Release。
-
-### 2. 获取固件
-
-- **Artifacts**：Actions 运行页面底部，按目标分 4 个压缩包（保留 90 天）
-- **Release**：`release` 打开时自动创建，tag 形如 `immortalwrt-24.10-20261103`，附 `SHA256SUMS.txt`
-
-### 3. 刷机
-
-```bash
-# x86：解压后写盘（u 盘/硬盘/虚拟磁盘），注意 of 千万别写错
-gunzip immortalwrt-24.10.6-x86-64-generic-squashfs-combined-efi.img.gz
-# Linux/macOS
-sudo dd if=immortalwrt-24.10.6-x86-64-generic-squashfs-combined-efi.img of=/dev/sdX bs=4M status=progress conv=fsync
-# Windows 用 balenaEtcher / Rufus 写入
-```
-
-- 支持 UEFI 的机器用 `combined-efi`，老机器用 `combined`
-- ARM 设备把 `combined-efi.img` 写到 SD 卡 / eMMC / 虚拟磁盘
-- 虚拟机（PVE/ESXi）直接导入 `img` 或用 `qemu-img convert` 转 `qcow2`
-
-### 4. 首次登录
-
-| 项目 | 值 |
-| --- | --- |
-| 管理地址 | `http://192.168.1.1` |
-| 用户名 | `root` |
-| 密码 | **空**（首次登录后请立刻在 `系统 → 管理权` 设置） |
-| 默认语言 | 简体中文 |
-| 默认时区 | `Asia/Shanghai` |
+> Consumer routers (ramips / ipq / mediatek ...) are out of scope: image rules differ per model and need per-device maintenance.
 
 ---
 
-## 🔧 四项需求的实现方式
+## Usage
 
-### 1. 更换 / 加速国内软件源（opkg）
+### 1. Trigger a build (manual, always)
 
-镜像内置 `/usr/sbin/opkg-mirror`，并在**首次联网时自动择优**（hotplug 触发，只跑一次）。
+Actions -> **Build ImmortalWrt** -> **Run workflow**:
+
+| Input | Meaning |
+| --- | --- |
+| `branch` | Upstream branch: `openwrt-24.10` (default, opkg), `openwrt-25.12` (apk), `master` |
+| `targets` | Comma separated, e.g. `x86_64,armsr_armv8`. Empty or `all` builds everything |
+| `release` | Create a GitHub Release when the build succeeds (default on) |
+| `dry_run` | Only assemble + validate `.config` (~10 min, no compile). Use it to check a config change cheaply |
+
+There is no scheduled build and no tag trigger. `dry_run: true` is the fastest way to verify that a config edit still resolves to the right target.
+
+### 2. Where the images are
+
+- **Release** (recommended): `release` is on by default, so a successful run creates a release tagged `immortalwrt-24.10-20261103-2040` (branch + UTC timestamp) with all images and `SHA256SUMS.txt`.
+- **Artifacts**: bottom of the run page, one zip per target, kept for 90 days.
+- **If you see no artifacts at all**, the build failed before the *Collect images* step - open the run, look at the red step (`Compile firmware`), and check the last `ERROR:`/`*** Error` lines. Artifacts only exist for successful runs.
+
+Typical build time: ~70-110 minutes per target on a cold cache, faster afterwards (`dl/` + `ccache` are cached per target).
+
+### 3. Flash a new device
 
 ```bash
-opkg-mirror              # 测速后自动选最快（默认行为）
-opkg-mirror ustc         # 中科大
-opkg-mirror nju          # 南京大学
-opkg-mirror zju          # 浙江大学（上交镜像会跳转到这里）
-opkg-mirror official     # 恢复官方源
-opkg-mirror status       # 查看当前源
+gunzip immortalwrt-24.10.x-x86-64-generic-squashfs-combined-efi.img.gz
+# Linux: target disk must be the whole device, not a partition
+sudo dd if=immortalwrt-24.10.x-x86-64-generic-squashfs-combined-efi.img of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-- 只是把 `https://downloads.immortalwrt.org` 换成了镜像站前缀，路径结构完全一致，因此不会破坏 `opkg update` / 版本对应关系
-- 自动选择时会真实下载一小段 `Packages.gz` 测速，全部不可达（比如没网）时保持原配置不动
-- 原文件备份为 `distfeeds.conf.orig`，随时可回滚
-- 同时兼容 apk（25.12+ 的 `/etc/apk/repositories.d/*.list`）
-- 关闭自动择优：`rm /etc/opkg-mirror.auto`
+- UEFI machine -> `combined-efi`; legacy BIOS -> `combined`
+- Windows: write the `.img` with balenaEtcher / Rufus
+- ARM: write `combined-efi.img` to SD card, eMMC or the virtual disk
+- Proxmox/ESXi: import the `.img`, or `qemu-img convert -f raw -O qcow2 in.img out.qcow2`
 
-### 2. Turbo ACC 与 FullCone NAT
+### 4. First login
 
-`网络 → Turbo ACC 网络加速`（由本仓库的 `package/luci-app-turboacc` 提供，不依赖第三方 feed）：
-
-| 开关 | 实际动作 |
+| Item | Value |
 | --- | --- |
-| BBR 拥塞控制 | 写 `/etc/sysctl.d/99-turboacc.conf`：`net.core.default_qdisc=fq` + `net.ipv4.tcp_congestion_control=bbr` |
-| 软件流量分载 | `firewall.@defaults[0].flow_offloading=1` |
-| 硬件流量分载 (HW NAT) | `firewall.@defaults[0].flow_offloading_hw=1` |
-| FullCone NAT | `firewall.@defaults[0].fullcone=1` + 加载 `nft_fullcone` 模块 |
+| Address | `http://192.168.1.1` |
+| User | `root` |
+| Password | **empty** - set one right away in *System -> Administration* |
+| Language | Simplified Chinese |
+| Timezone | `Asia/Shanghai` |
 
-四项默认全部开启（ImmortalWrt 的 firewall4 本身已打上 fullcone 补丁，这里只是把它暴露成菜单并显式落盘）。
+---
 
-> ⚠️ **和透明代理的冲突**：Flow Offload 会让已建立的连接绕过 netfilter，从而让 TPROXY / TUN 规则失效。
-> 使用 nikki 且发现「代理不生效 / 部分站点直连」时，请把 **硬件流量分载 (HW NAT)** 关掉；仍有问题时连软件分载一起关。
+## Upgrading an existing install (keeping your settings)
 
-需要的话也可以用命令行：
+This is the workflow for an x86_64 box that is already running this firmware with nikki configured: **you do not re-flash with dd, and you do not lose your config**.
+
+### Rule of thumb
+
+| Situation | Do this |
+| --- | --- |
+| Already running this firmware, want the new build | `sysupgrade` with the **squashfs combined** image, settings kept |
+| First install, or you want a factory-clean box | write the image with `dd` / Etcher |
+
+`sysupgrade` on x86 backs up your config to the boot partition, writes the new image, reboots and restores the backup. Config is kept **by default** - the destructive option is `-n`, do not use it.
+
+### Step by step (LuCI)
+
+1. New release -> download **`*-squashfs-combined-efi.img.gz`** (UEFI) or **`*-squashfs-combined.img.gz`** (legacy BIOS). Do **not** pick `ext4`, and do not un-gzip it.
+2. *System -> Backup / Flash Firmware* -> **Generate archive** and save it somewhere safe (belt and braces).
+3. In the same page, *Flash new firmware image* -> choose the `.img.gz` -> **keep `Keep settings` checked** -> Flash.
+4. The box reboots twice (~2-4 min). Settings, nikki subscriptions, DHCP leases, static routes, firewall rules stay.
+
+### Step by step (SSH)
+
+```bash
+# 0) snapshot first (download /tmp/backup-*.tar.gz via LuCI afterwards)
+sysupgrade -b /tmp/backup-$(date +%F).tar.gz
+
+# 1) fetch the image straight from the release page
+cd /tmp
+wget -O fw.img.gz https://github.com/<you>/AutoBuild-ImmortalWrt/releases/download/<tag>/<image>.img.gz
+
+# 2) optional integrity check against SHA256SUMS.txt from the release
+sha256sum fw.img.gz
+
+# 3) upgrade, keep settings (default). -v = verbose
+sysupgrade -v fw.img.gz
+```
+
+Useful flags:
+
+| Flag | Effect |
+| --- | --- |
+| (none) | Keep `/etc/config` + files listed in `/etc/sysupgrade.conf` and `/lib/upgrade/keep.d/*` |
+| `-c` | Also keep *every* modified file under `/etc` (broader, use when you edited files outside `/etc/config`) |
+| `-n` | **Wipe settings** - factory clean |
+| `-F` | Force, skip the image/target compatibility check (only when you really mean it) |
+
+### Things worth knowing
+
+- **Packages are not preserved**, only configuration. Everything this project ships (nikki, Turbo ACC, LuCI apps) is compiled into the image, so there is nothing to reinstall. Anything you added later with `opkg install` has to be reinstalled.
+- **The opkg mirror choice survives** the upgrade: `/etc/opkg/distfeeds.conf`, `/etc/opkg-mirror.state` and the apk equivalents are listed in `files/lib/upgrade/keep.d/99-opkg-mirror`.
+- **x86 rewrites the whole disk.** If the partition layout of the new image differs from the old one, sysupgrade prints `Partition layout has changed. Full image will be written.` - config is still restored from the boot partition, but any extra partition (a separate `/mnt/data`, a dual-boot Windows, ...) is gone. Check `CONFIG_TARGET_ROOTFS_PARTSIZE` in `configs/x86_64.config` (currently 1 GB) if you rely on a custom layout.
+- **Rolling back** is the same command with the previous release's image - keep the last good `.img.gz` around.
+- If the release page shows a version mismatch warning in LuCI, that is only the `/etc/openwrt_release` string; it is the same target, so `sysupgrade -F` is safe here.
+
+---
+
+## How the four requirements are implemented
+
+### 1. China opkg mirror
+
+`/usr/sbin/opkg-mirror` plus a one-shot hotplug hook (`/etc/hotplug.d/iface/99-opkg-mirror`) that runs on the first WAN-up.
+
+```bash
+opkg-mirror              # benchmark and pick the fastest (default)
+opkg-mirror ustc         # USTC
+opkg-mirror nju          # Nanjing University
+opkg-mirror zju          # Zhejiang University
+opkg-mirror official     # back to downloads.immortalwrt.org
+opkg-mirror status       # show current mirror
+```
+
+- Only the host prefix is swapped, the path layout is identical, so version/repo consistency is untouched
+- Auto mode really downloads a slice of `Packages.gz` and measures throughput; if nothing is reachable it leaves the config alone
+- The original file is kept as `*.orig`, and auto-pick can be disabled with `rm /etc/opkg-mirror.auto`
+- apk (`/etc/apk/repositories.d/*.list`, 25.12+) is handled too
+
+### 2. Turbo ACC and FullCone NAT
+
+`Network -> Turbo ACC` (provided by `package/luci-app-turboacc` in this repo, no third-party feed):
+
+| Toggle | Effect |
+| --- | --- |
+| BBR | writes `/etc/sysctl.d/99-turboacc.conf`: `net.core.default_qdisc=fq` + `net.ipv4.tcp_congestion_control=bbr` |
+| Software flow offloading | `firewall.@defaults[0].flow_offloading=1` |
+| Hardware flow offloading (HW NAT) | `firewall.@defaults[0].flow_offloading_hw=1` |
+| FullCone NAT | `firewall.@defaults[0].fullcone=1` plus the `nft_fullcone` module |
+
+All four are on by default. ImmortalWrt already patches firewall4 for fullcone; this app just exposes it and persists it.
+
+> **Conflict with transparent proxies**: flow offloading bypasses netfilter for established connections, which breaks TPROXY/TUN. If nikki does not work or some sites go direct, turn off **Hardware flow offloading (HW NAT)** first, then software flow offloading.
 
 ```bash
 uci set turboacc.config.flow_offloading_hw='0'
@@ -123,38 +181,36 @@ uci commit turboacc
 /etc/init.d/turboacc reload
 ```
 
-### 3. 多架构支持
+### 3. Multi-arch
 
-见上文「支持的目标」。四个目标在同一个 matrix 里并行编译，互不影响；每个目标独立缓存 `dl/` 与 `ccache`。
+See *Supported targets*. Each target is an independent matrix entry with its own `dl/` + `ccache` cache, so one failing arch does not block the others.
 
-### 4. 默认内置 nikki
+### 4. nikki built in
 
-`scripts/diy.sh` 会自动追加 feed：
+`scripts/diy.sh` appends the feed before `feeds update`:
 
 ```
 src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main
 ```
 
-并在 `configs/common.config` 中默认选中 `nikki`、`luci-app-nikki`、`luci-i18n-nikki-zh-cn`、`mihomo-meta`。
-固件烧好后进入 `服务 → Nikki` 导入订阅即可；nikki 要求 OpenWrt ≥ 24.10、内核 ≥ 5.13、firewall4，本项目的目标全部满足。
+`configs/common.config` selects `nikki`, `luci-app-nikki`, `luci-i18n-nikki-zh-cn` and `mihomo-meta`. After flashing, open *Services -> Nikki* and import your subscription. nikki needs OpenWrt >= 24.10, kernel >= 5.13 and firewall4 - all our targets qualify.
 
 ---
 
-## 🛠 自定义
+## Customizing
 
-| 想改什么 | 改哪里 |
+| Goal | Where |
 | --- | --- |
-| 增删软件包 / 换主题 / 语言 | `configs/common.config` |
-| 分区大小、网卡驱动、存储支持 | `configs/<目标>.config` |
-| 增加新目标 | 新建 `configs/xxx.config`，并在 `.github/targets.json` 里加一条记录 |
-| 追加 feed / 打补丁 / 改默认值 | `scripts/diy.sh`（在 `feeds update` 之前执行） |
-| 预置配置文件（uci-defaults、脚本、证书等） | `files/`（整体覆盖到镜像根目录） |
-| 换上游仓库 / 分支 | workflow 里的 `SRC_REPO` 与 `branch` 输入 |
+| Add/remove packages, theme, language | `configs/common.config` |
+| Rootfs size, NIC/storage drivers | `configs/<target>.config` |
+| Add a target | new `configs/xxx.config` + an entry in `.github/targets.json` |
+| Extra feeds / patches / defaults | `scripts/diy.sh` (runs before `feeds update`) |
+| Ship files into the image (uci-defaults, scripts, certs) | `files/` (copied over the rootfs) |
+| Different upstream repo/branch | `SRC_REPO` env and the `branch` input |
 
-> `configs/*.config` 是**片段**，不需要写完整 `.config`：编译时会 `cat common.config + <目标>.config > .config` 再 `make defconfig`，
-> 由 Kconfig 自动补齐依赖。写错/不存在的选项会被 Kconfig 静默忽略，因此 `scripts/check-config.sh` 会在编译前强制校验目标平台与关键包是否真的被选中。
+`configs/*.config` are **fragments**, not full `.config` files: the workflow concatenates `common.config` + target fragment and runs `make defconfig`, letting Kconfig resolve dependencies. Unknown symbols are dropped silently, which is why `scripts/check-config.sh` hard-fails when the target or a key package is missing.
 
-**本地编译**（Linux / WSL2）：
+Local build (Linux / WSL2):
 
 ```bash
 bash scripts/build-local.sh x86_64 openwrt-24.10 8
@@ -162,55 +218,51 @@ bash scripts/build-local.sh x86_64 openwrt-24.10 8
 
 ---
 
-## ❓ 常见问题
+## FAQ
 
-**Q：编译失败了怎么办？**
-先看失败的那一步日志。`make` 失败会自动用 `-j1 V=s` 重跑一次，日志更清晰。偶发的下载失败重新 Run 一次通常就好（`dl/` 有缓存）。
+**Build failed - what now?** Check the red step. `make` is retried once with `-j1 V=s`, which gives a readable error. Transient download failures usually disappear on a re-run (the `dl/` cache is reused).
 
-**Q：Actions 提示 minutes 用完了？**
-公开仓库的 Actions 免费。私有仓库每个目标约消耗 100～150 分钟额度，四个目标一次约 500 分钟，注意额度。
+**Out of Actions minutes?** Public repos are free. On a private repo expect ~100-150 minutes per target, ~500 minutes for all four.
 
-**Q：定时任务怎么不跑了？**
-GitHub 会在仓库 60 天无活动后自动停用定时工作流，去 Actions 页面点一下 `Enable workflow` 即可。
+**Why is my router model missing?** See *Supported targets*. Adding one means picking the right `CONFIG_TARGET_<board>_<subtarget>` and device profile, and often per-device image rules.
 
-**Q：为什么没有我的路由器型号？**
-见「支持的目标」下的说明。需要的话可以参照 `configs/` 的写法自行加一个 target，注意要选对 `CONFIG_TARGET_<board>_<subtarget>` 与设备 profile。
+**Does anything build on its own?** No. Manual dispatch only. If you ever want a schedule back, add a `schedule:` trigger to `.github/workflows/build.yml`.
 
-**Q：以后想升级保留配置？**
-sysupgrade 会保留 `/etc/config/turboacc`（已声明 conffiles）与 `/etc/opkg-mirror.state`。
+**Hardware flow offloading vs. nikki?** See the note in section 2 - turn HW NAT off when the proxy misbehaves.
 
 ---
 
-## 📁 目录结构
+## Repository layout
 
 ```
 .
 ├── .github/
-│   ├── targets.json              # 目标清单（id / 配置文件名 / board / subtarget）
-│   ├── plan.py                   # 根据输入生成 matrix
-│   └── workflows/build.yml       # 编译 + 发布工作流
+│   ├── targets.json              # target list (id / config file / board / subtarget)
+│   ├── plan.py                   # turns inputs into a build matrix
+│   └── workflows/build.yml       # manual build + release pipeline
 ├── configs/
-│   ├── common.config             # 通用片段：语言包、nikki、Turbo ACC、常用工具
+│   ├── common.config             # shared: i18n, nikki, Turbo ACC, tools
 │   ├── x86_64.config
 │   ├── x86_32.config
 │   ├── armsr_armv8.config
 │   └── armsr_armv7.config
-├── files/                        # rootfs 覆盖层
+├── files/                        # rootfs overlay
 │   ├── etc/hotplug.d/iface/99-opkg-mirror
 │   ├── etc/uci-defaults/99-custom
+│   ├── lib/upgrade/keep.d/99-opkg-mirror   # keep mirror config across sysupgrade
 │   └── usr/sbin/opkg-mirror
 ├── package/
-│   └── luci-app-turboacc/        # 自研 Turbo ACC
+│   └── luci-app-turboacc/        # Turbo ACC LuCI app
 └── scripts/
-    ├── diy.sh                    # 注入 feed / 软件包 / 覆盖层
-    ├── check-config.sh           # 编译前校验
-    └── build-local.sh            # 本地编译
+    ├── diy.sh                    # inject feeds / packages / overlay
+    ├── check-config.sh           # pre-build config validation
+    └── build-local.sh            # local build
 ```
 
 ---
 
-## 📄 许可
+## License
 
 [MIT](LICENSE) © Ben
 
-上游 ImmortalWrt、nikki、mihomo 等分别遵循其各自许可证。
+Upstream ImmortalWrt, nikki and mihomo keep their own licenses.

@@ -42,6 +42,11 @@ define Package/luci-app-turboacc/conffiles
 /etc/config/turboacc
 endef
 
+# No source, nothing to compile. Without this the default Build/Compile
+# runs make inside an empty PKG_BUILD_DIR and fails.
+define Build/Compile
+endef
+
 define Package/luci-app-turboacc/install
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./root/etc/config/turboacc $(1)/etc/config/turboacc
