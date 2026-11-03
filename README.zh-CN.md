@@ -53,7 +53,7 @@ Actions → **Build ImmortalWrt** → **Run workflow**：
 
 ### 2. 产物在哪
 
-- **Release（推荐）**：`release` 默认开启，成功一次就生成 tag 形如 `immortalwrt-24.10-20261103-2040`（分支 + UTC 时间），附件含全部镜像与 `SHA256SUMS.txt`
+- **Release（推荐）**：`release` 默认开启，成功一次就生成 tag 形如 `immortalwrt-24.10-20261103-1357`（分支 + UTC 时间 HHMM），附件含全部镜像与 `SHA256SUMS.txt`
 - **Artifacts**：运行页面底部，按目标分包，保留 90 天
 - **一个产物都看不到 = 编译失败**：展开运行记录，看红色那一步（通常是 `Compile firmware`），搜索最后的 `ERROR:` / `*** Error`。Artifacts 只在成功时产生
 

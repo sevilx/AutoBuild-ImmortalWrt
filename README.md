@@ -53,7 +53,7 @@ There is no scheduled build and no tag trigger. `dry_run: true` is the fastest w
 
 ### 2. Where the images are
 
-- **Release** (recommended): `release` is on by default, so a successful run creates a release tagged `immortalwrt-24.10-20261103-2040` (branch + UTC timestamp) with all images and `SHA256SUMS.txt`.
+- **Release** (recommended): `release` is on by default, so a successful run creates a release tagged `immortalwrt-24.10-<date>-<HHMM>` (branch + UTC time, e.g. `immortalwrt-24.10-20261103-1357`) with all images and `SHA256SUMS.txt`.
 - **Artifacts**: bottom of the run page, one zip per target, kept for 90 days.
 - **If you see no artifacts at all**, the build failed before the *Collect images* step - open the run, look at the red step (`Compile firmware`), and check the last `ERROR:`/`*** Error` lines. Artifacts only exist for successful runs.
 
