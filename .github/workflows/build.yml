@@ -25,6 +25,10 @@ on:
         description: '编译完成后创建 GitHub Release'
         type: boolean
         default: true
+      dry_run:
+        description: '只生成并校验 .config（不下载、不编译，约 10 分钟）'
+        type: boolean
+        default: false
 
   schedule:
     # 每周六 01:00（北京时间）自动编译；仅产出 Artifacts，不发 Release
@@ -163,16 +167,19 @@ jobs:
           bash ../scripts/check-config.sh "${{ matrix.board }}" "${{ matrix.subtarget }}" "${{ matrix.id }}"
 
       - name: 下载依赖源码
+        if: github.event.inputs.dry_run != 'true'
         run: |
           cd openwrt
           make download -j8 || make download -j1 V=s
 
       - name: 编译固件
+        if: github.event.inputs.dry_run != 'true'
         run: |
           cd openwrt
           make -j"$(( $(nproc) + 1 ))" || make -j1 V=s
 
       - name: 收集固件
+        if: github.event.inputs.dry_run != 'true'
         run: |
           set -euo pipefail
           mkdir -p out
@@ -188,6 +195,7 @@ jobs:
           sha256sum ./* > SHA256SUMS.txt
 
       - name: 上传产物
+        if: github.event.inputs.dry_run != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.id }}
