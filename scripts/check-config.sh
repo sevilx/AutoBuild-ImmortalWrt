@@ -30,7 +30,7 @@ expect "CONFIG_TARGET_SUBTARGET=\"${SUBTARGET}\""
 # ---- 关键软件包 ----
 REQUIRED_PKGS="
 luci
-luci-ssl
+luci-ssl-openssl
 luci-app-turboacc
 kmod-tcp-bbr
 kmod-nft-fullcone
@@ -42,6 +42,19 @@ mihomo-meta
 for pkg in ${REQUIRED_PKGS}; do
 	expect "CONFIG_PACKAGE_${pkg}=y"
 done
+
+# ---- ustream-ssl 只能有一个后端 ----
+# 两个变体会装同一个 /lib/libustream-ssl.so，opkg 安装阶段直接
+# check_data_file_clashes 失败（约编译 50 分钟后才炸，这里提前拦）
+USTREAM_SEL="$(grep -E '^CONFIG_PACKAGE_libustream-(openssl|mbedtls|wolfssl)=y$' .config || true)"
+USTREAM_N="$(printf '%s\n' "${USTREAM_SEL}" | grep -c . || true)"
+if [ "${USTREAM_N}" -gt 1 ]; then
+	echo "::error::${ID}: 同时选中了多个 ustream-ssl 后端（会导致 opkg 安装冲突）"
+	printf '  %s\n' ${USTREAM_SEL}
+	fail=1
+elif [ "${USTREAM_N}" -eq 1 ]; then
+	echo "ustream-ssl 后端：$(echo "${USTREAM_SEL}" | sed 's/^CONFIG_PACKAGE_//;s/=y$//')"
+fi
 
 # ---- 不应出现的组合 ----
 if grep -qx 'CONFIG_TARGET_MULTI_PROFILE=y' .config; then
