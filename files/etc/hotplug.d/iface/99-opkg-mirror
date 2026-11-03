@@ -1,0 +1,17 @@
+#!/bin/sh
+# ============================================================================
+#  首次联网时自动把软件源切换到最快的国内镜像（后台执行，不阻塞启动）
+#  说明：
+#    - 仅执行一次，成功后写入 /etc/opkg-mirror.state
+#    - 想关闭该行为：rm /etc/opkg-mirror.auto
+#    - 想立刻切换：  opkg-mirror ustc
+# ============================================================================
+[ "${ACTION:-}" = "ifup" ] || exit 0
+[ -f /etc/opkg-mirror.auto ] || exit 0
+[ -f /etc/opkg-mirror.state ] && exit 0
+[ -x /usr/sbin/opkg-mirror ] || exit 0
+
+(
+	/usr/sbin/opkg-mirror auto --quiet --from-hotplug >/dev/null 2>&1
+) &
+exit 0

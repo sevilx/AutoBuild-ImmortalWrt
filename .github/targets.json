@@ -1,0 +1,30 @@
+[
+  {
+    "id": "x86_64",
+    "name": "x86-64 (amd64)",
+    "config": "x86_64.config",
+    "board": "x86",
+    "subtarget": "64"
+  },
+  {
+    "id": "x86_32",
+    "name": "x86-32 (i386)",
+    "config": "x86_32.config",
+    "board": "x86",
+    "subtarget": "generic"
+  },
+  {
+    "id": "armsr_armv8",
+    "name": "ARMv8 (aarch64)",
+    "config": "armsr_armv8.config",
+    "board": "armsr",
+    "subtarget": "armv8"
+  },
+  {
+    "id": "armsr_armv7",
+    "name": "ARMv7 (arm32)",
+    "config": "armsr_armv7.config",
+    "board": "armsr",
+    "subtarget": "armv7"
+  }
+]

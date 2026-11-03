@@ -1,0 +1,22 @@
+#!/bin/sh /etc/rc.common
+# ============================================================================
+#  Turbo ACC 服务：开机与每次保存设置后都会重新应用一遍
+# ============================================================================
+START=99
+STOP=10
+
+start() {
+	/usr/sbin/turboacc-apply
+}
+
+reload() {
+	/usr/sbin/turboacc-apply
+}
+
+restart() {
+	/usr/sbin/turboacc-apply
+}
+
+stop() {
+	:
+}

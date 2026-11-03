@@ -1,0 +1,218 @@
+#!/bin/sh
+# ============================================================================
+#  opkg-mirror —— 一键把 ImmortalWrt 的软件源切换到国内镜像
+#
+#  用法：
+#    opkg-mirror                 # 测速后自动选择最快的可用镜像
+#    opkg-mirror auto            # 同上
+#    opkg-mirror ustc            # 中科大镜像
+#    opkg-mirror nju             # 南京大学镜像
+#    opkg-mirror zju             # 浙江大学镜像（原上海交大镜像会跳转到这里）
+#    opkg-mirror official        # 恢复官方源
+#    opkg-mirror status          # 查看当前使用的源
+#
+#  选项：
+#    --quiet       只输出结果，不打印过程
+#    --from-hotplug 由 hotplug 调用（不写 auto 标记之外的副作用）
+#
+#  兼容 opkg（24.10 及更早）与 apk（25.12 及之后）两种包管理器。
+# ============================================================================
+set -u
+
+STATE_FILE="/etc/opkg-mirror.state"
+MIRROR_ORDER="ustc nju zju official"
+QUIET=0
+
+log() {
+	[ "${QUIET}" = "1" ] || echo "$@"
+}
+
+err() {
+	echo "$@" >&2
+}
+
+mirror_base() {
+	case "$1" in
+		official) echo "https://downloads.immortalwrt.org" ;;
+		ustc)     echo "https://mirrors.ustc.edu.cn/immortalwrt" ;;
+		nju)      echo "https://mirrors.nju.edu.cn/immortalwrt" ;;
+		zju)      echo "https://mirrors.zju.edu.cn/immortalwrt" ;;
+		*) return 1 ;;
+	esac
+}
+
+# 所有需要改写的源文件（opkg 与 apk 都覆盖）
+feed_files() {
+	[ -f /etc/opkg/distfeeds.conf ] && echo /etc/opkg/distfeeds.conf
+	[ -f /etc/apk/repositories ] && echo /etc/apk/repositories
+	for f in /etc/apk/repositories.d/*.list; do
+		[ -f "$f" ] && echo "$f"
+	done
+	return 0
+}
+
+# 从源文件里提取出相对路径，例如 /releases/24.10.6/targets/x86/64/packages
+rel_paths() {
+	for f in $(feed_files); do
+		awk '{
+			u = $NF
+			if (u ~ /^https?:\/\//) {
+				sub(/^https?:\/\/[^\/]+/, "", u)
+				print u
+			}
+		}' "$f"
+	done | sort -u
+}
+
+have_curl() {
+	command -v curl >/dev/null 2>&1
+}
+
+# 返回下载速度（字节/秒），失败返回 0
+probe_speed() {
+	_base="$1"
+	_rel="$2"
+	_speed=$(curl -sfL --max-time 8 -r 0-196607 -o /dev/null -w '%{speed_download}' \
+		"${_base}${_rel}" 2>/dev/null) || _speed=0
+	case "${_speed}" in
+		''|*[!0-9.]*) _speed=0 ;;
+	esac
+	echo "${_speed}"
+}
+
+current_mirror() {
+	_name="unknown"
+	_base=""
+	for f in $(feed_files); do
+		_line=$(awk '/^[^#]/ && /https?:\/\//{print $NF; exit}' "$f" 2>/dev/null)
+		[ -n "${_line}" ] || continue
+		case "${_line}" in
+			*downloads.immortalwrt.org*) _name="official" ;;
+			*mirrors.ustc.edu.cn/immortalwrt*) _name="ustc" ;;
+			*mirrors.nju.edu.cn/immortalwrt*) _name="nju" ;;
+			*mirrors.zju.edu.cn/immortalwrt*) _name="zju" ;;
+			*) _name="custom" ;;
+		esac
+		_base="${_line}"
+		break
+	done
+	echo "${_name}|${_base}"
+}
+
+do_rewrite() {
+	_base="$1"
+	_done=0
+	for f in $(feed_files); do
+		[ -f "${f}.orig" ] || cp -f "$f" "${f}.orig" 2>/dev/null
+		if sed -i \
+			-e "s#https://downloads\.immortalwrt\.org#${_base}#g" \
+			-e "s#http://downloads\.immortalwrt\.org#${_base}#g" \
+			-e "s#https://mirrors\.ustc\.edu\.cn/immortalwrt#${_base}#g" \
+			-e "s#https://mirrors\.nju\.edu\.cn/immortalwrt#${_base}#g" \
+			-e "s#https://mirrors\.zju\.edu\.cn/immortalwrt#${_base}#g" \
+			"$f"; then
+			_done=1
+			log "  已更新 ${f}"
+		else
+			err "  警告：${f} 写入失败"
+		fi
+	done
+	[ "${_done}" = "1" ]
+}
+
+save_state() {
+	{
+		echo "mirror=$1"
+		echo "base=$2"
+		echo "updated=$(date '+%Y-%m-%d %H:%M:%S')"
+	} > "${STATE_FILE}"
+}
+
+usage() {
+	sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# ---------------------------------------------------------------- 参数解析
+ACTION="auto"
+for arg in "$@"; do
+	case "$arg" in
+		--quiet|-q) QUIET=1 ;;
+		--from-hotplug) : ;;
+		-h|--help|help) usage; exit 0 ;;
+		auto|ustc|nju|zju|official|status) ACTION="$arg" ;;
+		*) err "未知参数：$arg（用 -h 查看用法）"; exit 1 ;;
+	esac
+done
+
+if ! have_curl; then
+	err "缺少 curl，请先执行：opkg update && opkg install curl"
+	exit 1
+fi
+
+# ---------------------------------------------------------------- 状态查询
+if [ "${ACTION}" = "status" ]; then
+	cur=$(current_mirror)
+	echo "当前软件源：${cur%%|*}"
+	echo "示例地址：  ${cur#*|}"
+	if [ -f "${STATE_FILE}" ]; then
+		echo "切换记录：  $(tr '\n' ' ' < "${STATE_FILE}")"
+	fi
+	exit 0
+fi
+
+# ---------------------------------------------------------------- 选择镜像
+if [ "${ACTION}" = "auto" ]; then
+	RELS=$(rel_paths)
+	if [ -z "${RELS}" ]; then
+		err "未找到任何软件源配置（既没有 /etc/opkg/distfeeds.conf 也没有 apk repositories）"
+		exit 1
+	fi
+
+	log "开始测速选择镜像（每个镜像最多探测 8 秒）..."
+	BEST=""
+	BEST_SPEED=0
+	for m in ${MIRROR_ORDER}; do
+		base=$(mirror_base "${m}") || continue
+		speed=0
+		for rel in ${RELS}; do
+			speed=$(probe_speed "${base}" "${rel}")
+			awk -v s="${speed}" 'BEGIN{exit !(s > 0)}' && break
+			speed=0
+		done
+		if awk -v s="${speed}" 'BEGIN{exit !(s > 0)}'; then
+			log "  ${m}: $(awk -v s="${speed}" 'BEGIN{printf "%.0f KB/s", s/1024}')"
+			if awk -v a="${speed}" -v b="${BEST_SPEED}" 'BEGIN{exit !(a > b)}'; then
+				BEST="${m}"
+				BEST_SPEED="${speed}"
+			fi
+		else
+			log "  ${m}: 不可用"
+		fi
+	done
+
+	if [ -z "${BEST}" ]; then
+		err "所有镜像都探测失败（可能当前没有网络），已保持原有配置不变"
+		exit 1
+	fi
+	ACTION="${BEST}"
+	log "选择镜像：${ACTION}"
+fi
+
+BASE=$(mirror_base "${ACTION}") || { err "未知镜像：${ACTION}"; exit 1; }
+
+log "切换到 ${ACTION}（${BASE}）..."
+if ! do_rewrite "${BASE}"; then
+	err "改写软件源失败"
+	exit 1
+fi
+
+save_state "${ACTION}" "${BASE}"
+
+if command -v apk >/dev/null 2>&1; then
+	UPDATE_CMD="apk update"
+else
+	UPDATE_CMD="opkg update"
+fi
+
+log "完成。执行 ${UPDATE_CMD} 生效（LuCI：系统 → 软件包 → 刷新列表）。"
+exit 0

@@ -1,0 +1,17 @@
+#!/bin/sh
+# ============================================================================
+#  首次启动的默认设置（只执行一次，执行后自动删除）
+# ============================================================================
+uci -q batch <<-EOF
+	set system.@system[0].hostname='ImmortalWrt'
+	set system.@system[0].timezone='CST-8'
+	set system.@system[0].zonename='Asia/Shanghai'
+	set luci.main.lang='zh_cn'
+	commit system
+	commit luci
+EOF
+
+# 开启 opkg 镜像自动择优（可用 rm /etc/opkg-mirror.auto 关闭）
+touch /etc/opkg-mirror.auto
+
+exit 0

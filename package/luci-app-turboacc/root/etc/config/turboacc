@@ -1,0 +1,5 @@
+config turboacc 'config'
+	option bbr '1'
+	option flow_offloading '1'
+	option flow_offloading_hw '1'
+	option fullcone '1'

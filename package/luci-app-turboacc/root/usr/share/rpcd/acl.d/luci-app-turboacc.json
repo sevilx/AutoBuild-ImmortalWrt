@@ -1,0 +1,15 @@
+{
+	"luci-app-turboacc": {
+		"description": "Grant access to Turbo ACC configuration",
+		"read": {
+			"uci": [ "turboacc" ],
+			"file": {
+				"/etc/init.d/turboacc": [ "exec" ],
+				"/usr/sbin/turboacc-apply": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [ "turboacc" ]
+		}
+	}
+}

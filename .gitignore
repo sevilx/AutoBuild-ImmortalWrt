@@ -1,0 +1,12 @@
+# 编译工作区（本地编译时产生）
+/openwrt/
+/bin/
+/dl/
+/out/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
